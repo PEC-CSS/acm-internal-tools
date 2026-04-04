@@ -1,0 +1,29 @@
+logging:
+  level:
+    root: INFO
+    "[acm.internal.certification]": INFO
+
+spring:
+  profiles:
+    active: dev
+  application:
+    name: certification
+  datasource:
+    url: jdbc:sqlite:certificate.db
+    driver-class-name: org.sqlite.JDBC
+  jpa:
+    database-platform: org.hibernate.community.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: "ayushdubey.bt24cse@pec.edu.in"
+    password: "brnggiybkofskltf"
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true

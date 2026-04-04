@@ -1,0 +1,26 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/resources/archetype-resources/**
+!**/src/test/resources/archetype-resources/**
+
+# IDEs
+.idea/
+.settings/
+.project
+.classpath
+.factorypath
+*.iml
+.vscode/
+
+# Local databases
+*.db
+*.sqlite
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Certificates templates-upload
+templates-upload/
+*.pdf
+!templates-upload/.gitkeep
