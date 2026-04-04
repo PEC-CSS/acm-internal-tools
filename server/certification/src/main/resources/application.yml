@@ -16,14 +16,8 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
-  mail:
-    host: smtp.gmail.com
-    port: 587
-    username: "ayushdubey.bt24cse@pec.edu.in"
-    password: "brnggiybkofskltf"
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
+  gmail-api:
+    refresh-token: "${GMAIL_REFRESH_TOKEN}"
+    user-email: "${GMAIL_USER_EMAIL}"
+
+

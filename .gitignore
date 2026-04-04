@@ -24,3 +24,6 @@ Thumbs.db
 templates-upload/
 *.pdf
 !templates-upload/.gitkeep
+
+# Secrets
+secret.json

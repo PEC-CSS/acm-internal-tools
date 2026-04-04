@@ -1,5 +1,9 @@
-package acm.internal.certification.certificate;
+package acm.internal.certification.template;
 
+import acm.internal.certification.certificate.Certificate;
+import acm.internal.certification.certificate.MassMailService;
+import acm.internal.certification.event.Event;
+import acm.internal.certification.event.EventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ByteArrayResource;
@@ -28,12 +32,11 @@ import java.util.Optional;
 @Controller
 @RequestMapping("/ui")
 @RequiredArgsConstructor
-public class TemplateUploadController {
+public class TemplateController {
 
     private final EventRepository eventRepository;
-    private final CertificateGeneratorService generatorService;
+    private final TemplateGeneratorService generatorService;
     private final MassMailService massMailService;
-
     private static final String UPLOAD_DIR = "templates-upload";
 
     @GetMapping
@@ -57,7 +60,7 @@ public class TemplateUploadController {
         if (eventOpt.isPresent()) {
             Event event = eventOpt.get();
             if (event.getTemplate() == null) {
-                event.setTemplate(new CertificateTemplate());
+                event.setTemplate(new Template());
             }
             event.getTemplate().setTemplateName("CANVA_IMPORT");
             event.getTemplate().setTemplatePdfPath(path.toAbsolutePath().toString());
@@ -97,13 +100,18 @@ public class TemplateUploadController {
         Optional<Event> eventOpt = eventRepository.findById(eventId);
         if (eventOpt.isEmpty()) return "redirect:/ui?error=EventNotFound";
 
-        List<RecipientData> recipients = new ArrayList<>();
+        List<Certificate> recipients = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] data = line.split(",");
                 if (data.length >= 2) {
-                    recipients.add(new RecipientData(data[0].trim(), data[1].trim()));
+                    recipients.add(Certificate.builder()
+                            .recipientName(data[0].trim())
+                            .recipientEmail(data[1].trim())
+                            .event(eventOpt.get())
+                            .issueDate(LocalDate.now().toString())
+                            .build());
                 }
             }
         }

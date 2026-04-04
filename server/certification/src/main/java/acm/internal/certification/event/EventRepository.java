@@ -1,4 +1,4 @@
-package acm.internal.certification.certificate;
+package acm.internal.certification.event;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 

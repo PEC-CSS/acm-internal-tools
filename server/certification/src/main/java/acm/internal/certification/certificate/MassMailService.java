@@ -1,90 +1,130 @@
 package acm.internal.certification.certificate;
 
+import acm.internal.certification.event.Event;
+import acm.internal.certification.template.TemplateGeneratorService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
+import com.google.api.services.gmail.Gmail;
+import com.google.api.services.gmail.model.Message;
+import com.google.auth.http.HttpCredentialsAdapter;
+import com.google.auth.oauth2.UserCredentials;
 import jakarta.mail.MessagingException;
+import jakarta.mail.Session;
+import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.internet.MimeMultipart;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
-import java.util.ArrayList;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.Base64;
 import java.util.List;
+import java.util.Properties;
 
-/**
- * Service to handle bulk certificate generation and email distribution in a background job.
- * Uses batch mailing to optimize SMTP connection usage.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class MassMailService {
 
-    private final JavaMailSender mailSender;
-    private final CertificateGeneratorService generatorService;
+    private final TemplateGeneratorService generatorService;
+    private final ObjectMapper objectMapper;
 
-    /**
-     * Entry point for the asynchronous mailing job.
-     */
+    @Value("${spring.gmail-api.refresh-token}")
+    private String refreshToken;
+
+    @Value("${spring.gmail-api.user-email}")
+    private String userEmail;
+
+    private Gmail getGmailService() throws Exception {
+        // Read client secrets from secret.json in the classpath (resources folder)
+        ClassPathResource resource = new ClassPathResource("secret.json");
+        JsonNode root = objectMapper.readTree(resource.getInputStream());
+        
+        // Google json format handles "web" or "installed" (Desktop) apps
+        JsonNode secrets = root.has("web") ? root.get("web") : root.get("installed");
+        if (secrets == null) throw new RuntimeException("Invalid secret.json file - No 'web' or 'installed' object found");
+
+        String clientId = secrets.get("client_id").asText();
+        String clientSecret = secrets.get("client_secret").asText();
+
+        UserCredentials credentials = UserCredentials.newBuilder()
+                .setClientId(clientId)
+                .setClientSecret(clientSecret)
+                .setRefreshToken(refreshToken)
+                .build();
+        
+        return new Gmail.Builder(
+                GoogleNetHttpTransport.newTrustedTransport(),
+                GsonFactory.getDefaultInstance(),
+                new HttpCredentialsAdapter(credentials))
+                .setApplicationName("ACM Certification Tool")
+                .build();
+    }
+
     @Async
-    public void sendCertificates(Event event, List<RecipientData> recipients) {
-        log.info("Starting batch mass mail job for event: {} with {} recipients", event.getName(), recipients.size());
+    public void sendCertificates(Event event, List<Certificate> certificates) {
+        log.info("Starting Gmail API OAuth2 batch mass mail job using secret.json for event: {}", event.getName());
 
-        List<MimeMessage> messages = new ArrayList<>();
+        try {
+            Gmail service = getGmailService();
 
-        for (RecipientData data : recipients) {
-            try {
-                // Construct recipient certificate metadata
-                Certificate certificate = Certificate.builder()
-                        .recipientName(data.name())
-                        .recipientEmail(data.email())
-                        .event(event)
-                        .issueDate(LocalDate.now().toString())
-                        .build();
-
-                // 1. Generate the personalized PDF
-                byte[] pdfBytes = generatorService.generateCertificatePdf(certificate);
-
-                // 2. Wrap it in a MimeMessage
-                MimeMessage message = prepareMessage(data.email(), event.getName(), data.name(), pdfBytes);
-                messages.add(message);
-                
-                log.info("Successfully prepared certificate for: {}", data.email());
-            } catch (Exception e) {
-                log.error("Failed to prepare certificate for recipient: {}", data.email(), e);
+            for (Certificate certificate : certificates) {
+                try {
+                    byte[] pdfBytes = generatorService.generateCertificatePdf(certificate);
+                    MimeMessage mimeMessage = prepareMimeMessage(certificate.getRecipientEmail(), event.getName(), certificate.getRecipientName(), pdfBytes);
+                    
+                    Message message = createMessageWithEmail(mimeMessage);
+                    service.users().messages().send("me", message).execute();
+                    
+                    log.info("Sent Gmail API message to: {}", certificate.getRecipientEmail());
+                } catch (Exception e) {
+                    log.error("Failed to send via Gmail API for: {}", certificate.getRecipientEmail(), e);
+                }
             }
-        }
-
-        // 3. Dispatch all messages in a single SMTP batch connection
-        if (!messages.isEmpty()) {
-            try {
-                mailSender.send(messages.toArray(new MimeMessage[0]));
-                log.info("Batch dispatch successful! Sent {} certificates for event: {}", messages.size(), event.getName());
-            } catch (Exception e) {
-                log.error("SMTP Batch dispatch failed. Please check your mail configurations.", e);
-            }
-        } else {
-            log.warn("Mass mail job ended without sending any emails. Check previous error logs.");
+        } catch (Exception e) {
+            log.error("Failed to initialize Gmail API service with OAuth2 credentials from secret.json", e);
         }
     }
 
-    /**
-     * Prepares an individual email with attachment.
-     */
-    private MimeMessage prepareMessage(String to, String eventName, String recipientName, byte[] pdfBytes) throws MessagingException {
-        MimeMessage message = mailSender.createMimeMessage();
-        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+    private MimeMessage prepareMimeMessage(String to, String eventName, String recipientName, byte[] pdfBytes) throws MessagingException, IOException {
+        Properties props = new Properties();
+        Session session = Session.getDefaultInstance(props, null);
+        MimeMessage email = new MimeMessage(session);
 
-        helper.setTo(to);
-        helper.setSubject("Your Certificate for " + eventName);
-        helper.setText("Dear " + recipientName + ",\n\nCongratulations! Please find your participation certificate for " + eventName + " attached.\n\nBest regards,\nACM Internal Certification Team");
+        email.setFrom(new InternetAddress(userEmail));
+        email.addRecipient(jakarta.mail.Message.RecipientType.TO, new InternetAddress(to));
+        email.setSubject("Your Certificate for " + eventName);
 
-        String filename = "Certificate_" + eventName.replace(" ", "_") + ".pdf";
-        helper.addAttachment(filename, new ByteArrayResource(pdfBytes));
+        MimeBodyPart textPart = new MimeBodyPart();
+        textPart.setText("Dear " + recipientName + ",\n\nPlease find your participation certificate for " + eventName + " attached.\n\nBest regards,\nACM Team");
 
+        MimeBodyPart attachmentPart = new MimeBodyPart();
+        attachmentPart.setContent(pdfBytes, "application/pdf");
+        attachmentPart.setFileName("Certificate_" + eventName.replace(" ", "_") + ".pdf");
+
+        MimeMultipart multipart = new MimeMultipart();
+        multipart.addBodyPart(textPart);
+        multipart.addBodyPart(attachmentPart);
+
+        email.setContent(multipart);
+        return email;
+    }
+
+    private Message createMessageWithEmail(MimeMessage emailContent) throws MessagingException, IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        emailContent.writeTo(buffer);
+        byte[] bytes = buffer.toByteArray();
+        String encodedEmail = Base64.getUrlEncoder().encodeToString(bytes);
+        Message message = new Message();
+        message.setRaw(encodedEmail);
         return message;
     }
 }

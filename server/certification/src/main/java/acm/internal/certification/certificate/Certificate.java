@@ -1,5 +1,6 @@
 package acm.internal.certification.certificate;
 
+import acm.internal.certification.event.Event;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;

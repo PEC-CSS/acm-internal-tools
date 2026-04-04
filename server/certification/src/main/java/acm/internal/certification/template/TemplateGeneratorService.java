@@ -1,5 +1,6 @@
-package acm.internal.certification.certificate;
+package acm.internal.certification.template;
 
+import acm.internal.certification.certificate.Certificate;
 import com.itextpdf.forms.PdfAcroForm;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfReader;
@@ -12,23 +13,21 @@ import java.io.File;
 
 @Slf4j
 @Service
-public class PdfFormCertificateGenerator implements ICertificateGenerator {
+public class TemplateGeneratorService {
 
-    @Override
-    public boolean supports(String templateName) {
-        return "CANVA_IMPORT".equalsIgnoreCase(templateName);
-    }
+    public byte[] generateCertificatePdf(Certificate certificate) {
+        if (certificate.getEvent() == null || certificate.getEvent().getTemplate() == null) {
+            throw new RuntimeException("No template assigned to this event. Please upload a Canva PDF first.");
+        }
 
-    @Override
-    public byte[] generate(Certificate certificate) {
-        CertificateTemplate template = certificate.getEvent().getTemplate();
+        Template template = certificate.getEvent().getTemplate();
         String path = template.getTemplatePdfPath();
 
         log.info("Generating certificate by filling pre-designed PDF form: {}", path);
 
         if (path == null || !new File(path).exists()) {
             log.error("Template PDF file not found at path: {}", path);
-            throw new RuntimeException("Template PDF file missing. Please upload the Canva PDF to: " + path);
+            throw new RuntimeException("Template PDF file missing or not uploaded. Please upload the Canva PDF.");
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {

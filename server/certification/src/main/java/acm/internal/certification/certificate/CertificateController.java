@@ -1,20 +1,13 @@
 package acm.internal.certification.certificate;
 
-import java.util.List;
-
+import acm.internal.certification.template.TemplateGeneratorService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-import lombok.RequiredArgsConstructor;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/certificates")
@@ -22,7 +15,7 @@ import lombok.RequiredArgsConstructor;
 public class CertificateController {
 
     private final CertificateService certificateService;
-    private final CertificateGeneratorService certificateGeneratorService;
+    private final TemplateGeneratorService templateGeneratorService;
 
     @GetMapping
     public List<Certificate> getAllCertificates() {
@@ -37,7 +30,7 @@ public class CertificateController {
     @GetMapping("/{id}/download")
     public ResponseEntity<byte[]> downloadCertificate(@PathVariable Long id) {
         Certificate certificate = certificateService.getCertificateById(id);
-        byte[] pdfBytes = certificateGeneratorService.generateCertificatePdf(certificate);
+        byte[] pdfBytes = templateGeneratorService.generateCertificatePdf(certificate);
         
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=certificate-" + id + ".pdf")

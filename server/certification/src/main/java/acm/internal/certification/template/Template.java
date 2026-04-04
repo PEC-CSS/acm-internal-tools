@@ -1,4 +1,4 @@
-package acm.internal.certification.certificate;
+package acm.internal.certification.template;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -9,15 +9,11 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CertificateTemplate {
+public class Template {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
 
     private String templateName;
-    private String backgroundColor; // Hex value
-    private String titleText;
-    private Integer titleFontSize;
-    private String logoUrl;
     private String templatePdfPath;
 }
