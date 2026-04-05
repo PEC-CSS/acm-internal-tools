@@ -26,4 +26,6 @@ templates-upload/
 !templates-upload/.gitkeep
 
 # Secrets
-secret.json
+**/secret.json
+**/application-dev.yml
+**/certificate.db
